@@ -10,6 +10,8 @@ directory = root / ".secrets"
 directory.mkdir(exist_ok=True)
 private = directory / "signing.pem"
 public = directory / "verification.pem"
+keyring = directory / "keyring"
+keyring.mkdir(exist_ok=True)
 if private.exists() != public.exists():
     raise SystemExit("Incomplete signing key pair. Restore the missing key before continuing.")
 if not private.exists():

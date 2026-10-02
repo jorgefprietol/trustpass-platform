@@ -18,7 +18,7 @@ def verifier(settings, monkeypatch, status=200, response=None, failure=False):
         assert request.headers["Authorization"] == f"Bearer {settings.internal_token}"
         if failure:
             raise httpx.ConnectError("offline", request=request)
-        return httpx.Response(status, json=response or {"status": "active"})
+        return httpx.Response(status, json={"status": "active"} if response is None else response)
 
     monkeypatch.setattr(
         "trustpass.app.httpx.AsyncClient",
@@ -117,6 +117,7 @@ def test_untrusted_tokens_denied(settings, headers, monkeypatch, kind):
         (500, {"status": "active"}, False),
         (200, {"status": "unexpected"}, False),
         (200, {"missing": True}, False),
+        (200, [], False),
         (200, None, True),
     ],
 )

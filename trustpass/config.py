@@ -17,6 +17,8 @@ class Settings:
     audience: str = "trustpass-verifier"
     key_id: str = "trustpass-2026-01"
     run_worker: bool = True
+    trusted_keys_dir: str = ""
+    max_delivery_attempts: int = 8
 
     @classmethod
     def from_env(cls):
@@ -30,4 +32,7 @@ class Settings:
             internal_token=Path(os.environ["INTERNAL_TOKEN_FILE"]).read_text().strip(),
             issuer_url=os.getenv("ISSUER_URL", "http://issuer:8000"),
             audit_url=os.getenv("AUDIT_URL", "http://audit:8000"),
+            key_id=os.getenv("SIGNING_KEY_ID", "trustpass-2026-01"),
+            trusted_keys_dir=os.getenv("TRUSTED_KEYS_DIR", ""),
+            max_delivery_attempts=int(os.getenv("MAX_DELIVERY_ATTEMPTS", "8")),
         )

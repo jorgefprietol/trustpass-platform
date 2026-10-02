@@ -27,7 +27,7 @@ Se utilizan REST, Pydantic y OpenAPI 3 para contratos tipados, validación estri
 
 ## ADR 003 — Firma asimétrica y separación de claves
 
-RSA de 3072 bits y RS256 permiten que el verificador valide una credencial sin poseer la clave de emisión. Se fija algoritmo, emisor, audiencia y `kid`; el verificador usa exclusivamente la clave pública configurada. La publicación de JWKS facilita la consulta de esa clave, pero no cambia dinámicamente el conjunto de confianza del verificador. No se siguen URLs de claves recibidas en tokens.
+RSA de 3072 bits y RS256 permiten que el verificador valide una credencial sin poseer la clave de emisión. Se fija algoritmo, emisor y audiencia; `kid` selecciona una clave del conjunto local de confianza. JWKS publica las claves actuales y anteriores. La rotación manual conserva claves públicas anteriores mientras sus credenciales sigan vigentes y requiere recrear emisor y verificador durante una ventana de mantenimiento. No se siguen URLs de claves recibidas en tokens.
 
 `exp`, `iat`, `nbf`, `sub`, `iss`, `aud` y `jti` son obligatorios. La verificación criptográfica precede a cualquier consulta de revocación, para evitar que contenido no confiable controle solicitudes internas.
 
@@ -52,7 +52,7 @@ sequenceDiagram
     W->>D: Marcar entregado
 ```
 
-Si el proceso termina después de recibir la confirmación y antes de marcar el evento, éste vuelve a enviarse. Auditoría lo deduplica por ID, preservando entrega al menos una vez y un único registro lógico. Los reintentos son cada dos segundos, en lotes de 50 y con timeout HTTP de tres segundos; no hay broker, orden global garantizado, backoff exponencial ni dead letter queue. Un lote con fallos se vuelve a intentar y se contabilizan intentos para operación.
+Si el proceso termina después de recibir la confirmación y antes de marcar el evento, éste vuelve a enviarse. Auditoría lo deduplica por ID, preservando un único registro lógico. El despachador consulta cada dos segundos lotes de hasta 50 eventos cuyo `next_attempt_at` haya llegado, con timeout HTTP de tres segundos. Los fallos aplican backoff exponencial con jitter; tras ocho intentos por defecto pasan a una cola de errores persistente. Un endpoint administrativo interno permite reprogramarlos después de corregir la causa. La entrega conserva los eventos pendientes y admite reenvíos; no garantiza entrega sin intervención después de agotar reintentos, ni orden global. No se incluye un broker.
 
 No se necesita una saga: la operación crítica sólo modifica una base local; auditoría es una proyección eventual y su indisponibilidad no revierte la credencial. Una futura compra de credenciales con cobro independiente requeriría compensaciones y una decisión adicional sobre saga.
 

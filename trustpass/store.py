@@ -37,9 +37,18 @@ class Store:
                     );
                     CREATE TABLE IF NOT EXISTS outbox (
                         id TEXT PRIMARY KEY, payload TEXT NOT NULL, delivered INTEGER DEFAULT 0,
-                        attempts INTEGER DEFAULT 0
+                        attempts INTEGER DEFAULT 0, next_attempt_at REAL NOT NULL DEFAULT 0,
+                        dead_letter INTEGER NOT NULL DEFAULT 0, last_error TEXT
                     );
                 """)
+                columns = {row[1] for row in db.execute("PRAGMA table_info(outbox)")}
+                for name, definition in {
+                    "next_attempt_at": "REAL NOT NULL DEFAULT 0",
+                    "dead_letter": "INTEGER NOT NULL DEFAULT 0",
+                    "last_error": "TEXT",
+                }.items():
+                    if name not in columns:
+                        db.execute(f"ALTER TABLE outbox ADD COLUMN {name} {definition}")
             if role == "audit":
                 db.execute("""CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY, credential_id TEXT NOT NULL,

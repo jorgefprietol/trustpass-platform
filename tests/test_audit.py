@@ -60,13 +60,13 @@ def test_outbox_retries_and_drains_without_duplicate_events(
         "trustpass.worker.httpx.AsyncClient",
         lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs),
     )
-    asyncio.run(deliver_once(client.app.state.store, settings))
+    asyncio.run(deliver_once(client.app.state.store, settings, now=100))
     with client.app.state.store.connect() as db:
         row = db.execute("SELECT delivered,attempts FROM outbox").fetchone()
         assert tuple(row) == (0, 1)
     offline = False
-    asyncio.run(deliver_once(client.app.state.store, settings))
-    asyncio.run(deliver_once(client.app.state.store, settings))
+    asyncio.run(deliver_once(client.app.state.store, settings, now=200))
+    asyncio.run(deliver_once(client.app.state.store, settings, now=300))
     assert len(audit.get("/api/v1/events", headers=headers).json()) == 1
     with client.app.state.store.connect() as db:
         assert db.execute("SELECT delivered FROM outbox").fetchone()[0] == 1

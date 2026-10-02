@@ -6,12 +6,16 @@ Plataforma de credenciales digitales para controlar accesos, certificaciones pro
 
 Proyecto independiente de ingeniería desarrollado por **Jorge Prieto**. Su alcance, decisiones y comprobaciones están documentados para revisión técnica y reproducción local.
 
+![Panel de credenciales TrustPass](docs/images/trustpass-overview.png)
+
+Vista inicial del panel; los registros y contadores se cargan al conectar una sesión autenticada.
+
 ## Capacidades
 
-- Emisión de JWT firmados con RS256; clave privada disponible únicamente en el emisor.
+- Emisión de JWT firmados con RS256; clave privada disponible únicamente en el emisor. Rotación por `kid`, JWKS y conservación de claves públicas anteriores.
 - Verificación de firma, algoritmo permitido, emisor, audiencia, fechas y estado de revocación.
 - Idempotencia persistente de emisión, incluyendo solicitudes concurrentes y reinicios.
-- Patrón transactional outbox para publicar eventos, con reintentos y deduplicación en auditoría.
+- Patrón transactional outbox con espera exponencial, jitter, cola de errores recuperable y deduplicación en auditoría.
 - Gateway con límites de tráfico y tamaño, política CSP y aislamiento de endpoints internos.
 - Panel web adaptable: emisión, validación, revocación y consulta de actividad.
 - Contratos OpenAPI versionados, métricas Prometheus y logs JSON correlacionados.

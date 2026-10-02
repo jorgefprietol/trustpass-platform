@@ -9,10 +9,18 @@ x-service: &service
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   tmpfs: [/tmp]
+  healthcheck: &healthcheck
+    interval: 10s
+    timeout: ${TRUSTPASS_HEALTHCHECK_TIMEOUT:-10s}
+    start_period: 30s
+    retries: 10
   networks: [backend]
   environment: &environment
     API_TOKEN_FILE: /run/secrets/api_token
     INTERNAL_TOKEN_FILE: /run/secrets/internal_token
+    SIGNING_KEY_ID: ${SIGNING_KEY_ID:-trustpass-2026-01}
+    TRUSTED_KEYS_DIR: /run/trusted-keys
+    MAX_DELIVERY_ATTEMPTS: ${MAX_DELIVERY_ATTEMPTS:-8}
   mem_limit: 256m
   cpus: 0.5
 services:
@@ -22,14 +30,14 @@ services:
       <<: *environment
       SERVICE_ROLE: issuer
     secrets: [api_token, internal_token, signing_key, verification_key]
-    volumes: [issuer_data:/data]
+    volumes: [issuer_data:/data, "./.secrets/keyring:/run/trusted-keys:ro"]
   verifier:
     <<: *service
     environment:
       <<: *environment
       SERVICE_ROLE: verifier
     secrets: [api_token, internal_token, verification_key]
-    volumes: [verifier_data:/data]
+    volumes: [verifier_data:/data, "./.secrets/keyring:/run/trusted-keys:ro"]
     depends_on:
       issuer: {condition: service_healthy}
   audit:
@@ -51,6 +59,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     tmpfs: [/tmp]
+    healthcheck: *healthcheck
     ports: ["127.0.0.1:${TRUSTPASS_PORT:-18120}:8080"]
     networks: [edge, backend]
     depends_on:
@@ -61,8 +70,14 @@ services:
     cpus: 0.5
 networks:
   edge:
+    ipam:
+      config:
+        - subnet: ${TRUSTPASS_EDGE_SUBNET:-10.250.121.0/24}
   backend:
     internal: true
+    ipam:
+      config:
+        - subnet: ${TRUSTPASS_BACKEND_SUBNET:-10.250.120.0/24}
 volumes:
   issuer_data:
   verifier_data:

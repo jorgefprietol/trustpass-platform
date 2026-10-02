@@ -12,13 +12,14 @@ from uuid import UUID, uuid4
 
 import httpx
 import jwt
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest
 from pydantic import BaseModel, ConfigDict, Field
 
 from trustpass.config import Settings
+from trustpass.keyring import jwks as public_jwks
+from trustpass.keyring import trusted_keys
 from trustpass.store import Store
 from trustpass.worker import run_worker
 
@@ -65,13 +66,14 @@ class Event(BaseModel):
 
 def create_app(settings: Settings | None = None):
     settings = settings or Settings.from_env()
+    if not 1 <= settings.max_delivery_attempts <= 50:
+        raise ValueError("Delivery attempts must be between 1 and 50")
     if min(len(settings.api_token), len(settings.internal_token)) < 32:
         raise ValueError("Tokens must contain at least 32 characters")
     store = Store(settings.database)
     private_key = Path(settings.private_key).read_bytes() if settings.role == "issuer" else None
-    public_key = (
-        Path(settings.public_key).read_bytes() if settings.role in {"issuer", "verifier"} else None
-    )
+    if settings.role in {"issuer", "verifier"}:
+        trusted_keys(settings)
     registry = CollectorRegistry()
     requests = Counter(
         "trustpass_http_requests", "HTTP requests", ["role", "route", "status"], registry=registry
@@ -154,8 +156,7 @@ def create_app(settings: Settings | None = None):
 
         @app.get("/.well-known/jwks.json")
         def jwks():
-            key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(load_pem_public_key(public_key)))
-            return {"keys": [{**key, "kid": settings.key_id, "use": "sig", "alg": "RS256"}]}
+            return public_jwks(settings)
 
         @app.post(
             "/api/v1/credentials",
@@ -290,8 +291,23 @@ def create_app(settings: Settings | None = None):
         @app.get("/internal/outbox", dependencies=[Depends(internal_auth)])
         def outbox_status():
             with store.connect() as db:
-                count = db.execute("SELECT COUNT(*) FROM outbox WHERE delivered=0").fetchone()[0]
-                return {"pending": count}
+                count = db.execute(
+                    "SELECT COUNT(*) FROM outbox WHERE delivered=0 AND dead_letter=0"
+                ).fetchone()[0]
+                dead = db.execute("SELECT COUNT(*) FROM outbox WHERE dead_letter=1").fetchone()[0]
+                return {"pending": count, "dead_letter": dead}
+
+        @app.post("/internal/outbox/{event_id}/retry", dependencies=[Depends(internal_auth)])
+        def retry_dead_letter(event_id: UUID):
+            with store.connect() as db:
+                updated = db.execute(
+                    "UPDATE outbox SET attempts=0,dead_letter=0,next_attempt_at=0,last_error=NULL "
+                    "WHERE id=? AND delivered=0 AND dead_letter=1",
+                    (str(event_id),),
+                ).rowcount
+                if not updated:
+                    raise HTTPException(404, "Dead letter not found")
+            return {"scheduled": True}
 
     if settings.role == "verifier":
 
@@ -302,11 +318,12 @@ def create_app(settings: Settings | None = None):
         )
         async def verify(body: VerifyRequest, request: Request):
             try:
-                if jwt.get_unverified_header(body.token).get("kid") != settings.key_id:
+                key = trusted_keys(settings).get(jwt.get_unverified_header(body.token).get("kid"))
+                if key is None:
                     raise jwt.InvalidTokenError("Untrusted key")
                 claims = jwt.decode(
                     body.token,
-                    public_key,
+                    key,
                     algorithms=["RS256"],
                     issuer=settings.issuer,
                     audience=settings.audience,
@@ -332,7 +349,7 @@ def create_app(settings: Settings | None = None):
                     status = result.json()["status"]
                     if status not in {"active", "revoked"}:
                         raise ValueError("Invalid status")
-            except (httpx.HTTPError, ValueError, KeyError):
+            except (httpx.HTTPError, ValueError, KeyError, TypeError):
                 raise HTTPException(
                     503, "Revocation registry unavailable; verification denied"
                 ) from None
@@ -343,6 +360,7 @@ def create_app(settings: Settings | None = None):
         @app.post("/internal/events", dependencies=[Depends(internal_auth)])
         def ingest(event: Event):
             with store.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
                 values = (
                     str(event.id),
                     str(event.credential_id),

@@ -23,7 +23,9 @@ def check(name, condition):
 
 
 def compose(*args):
-    subprocess.run(["docker", "compose", *args], cwd=root, check=True, capture_output=True)
+    result = subprocess.run(["docker", "compose", *args], cwd=root, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"Compose {' '.join(args)} failed: {result.stderr}")
 
 
 def await_events(client, credential_ids, count):
@@ -108,7 +110,7 @@ try:
             )
             check("issuer outage denies verification", denied.status_code == 503)
         finally:
-            compose("start", "--wait", "issuer")
+            compose("up", "-d", "--no-build", "--wait", "--wait-timeout", "180", "issuer")
         check(
             "idempotency survives container restart",
             client.post("/api/v1/credentials", headers=request_headers, json=payload).json()
@@ -138,7 +140,7 @@ try:
             )
             time.sleep(3)
         finally:
-            compose("start", "--wait", "audit")
+            compose("up", "-d", "--no-build", "--wait", "--wait-timeout", "180", "audit")
         events = await_events(client, {credential["id"], second["id"]}, 3)
         check(
             "outbox recovers all events without duplicates",

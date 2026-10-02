@@ -17,6 +17,6 @@ No publicar vulnerabilidades ni credenciales en issues abiertos. Reportar hallaz
 
 El token opaco de operador es una credencial compartida de instalación y no provee identidad individual, roles ni OAuth2. Los eventos registran correlación, no una atribución autenticada a una persona. HTTP está previsto para loopback y la red interna de una máquina controlada; fuera de ese escenario se requiere TLS y un proveedor de identidad.
 
-Un JWT firmado es legible. Usar identificadores pseudónimos y no incluir información confidencial. La clave actual no rota automáticamente. El control de tasa funciona por dirección IP; un reverse proxy adicional necesita configuración explícita de IP real.
+Un JWT firmado es legible. Usar identificadores pseudónimos y no incluir información confidencial. La rotación de claves es manual y requiere una ventana de mantenimiento, conservando las claves públicas anteriores hasta la expiración de sus credenciales. El control de tasa funciona por dirección IP; un reverse proxy adicional necesita configuración explícita de IP real.
 
 Los volúmenes y claves deben respaldarse y protegerse. El administrador del host y quien controla Docker pueden leer secretos montados. No se presentan estos controles como cumplimiento de un estándar regulatorio o certificación de producción.
