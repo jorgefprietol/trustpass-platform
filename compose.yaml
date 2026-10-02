@@ -1,0 +1,74 @@
+x-service: &service
+  image: ${APP_IMAGE:-trustpass-platform:local}
+  build:
+    context: .
+    args:
+      SOURCE_REVISION: ${SOURCE_REVISION:-local}
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp]
+  networks: [backend]
+  environment: &environment
+    API_TOKEN_FILE: /run/secrets/api_token
+    INTERNAL_TOKEN_FILE: /run/secrets/internal_token
+  mem_limit: 256m
+  cpus: 0.5
+services:
+  issuer:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVICE_ROLE: issuer
+    secrets: [api_token, internal_token, signing_key, verification_key]
+    volumes: [issuer_data:/data]
+  verifier:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVICE_ROLE: verifier
+    secrets: [api_token, internal_token, verification_key]
+    volumes: [verifier_data:/data]
+    depends_on:
+      issuer: {condition: service_healthy}
+  audit:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVICE_ROLE: audit
+    secrets: [api_token, internal_token]
+    volumes: [audit_data:/data]
+  gateway:
+    image: ${GATEWAY_IMAGE:-trustpass-gateway:local}
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:-local}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    ports: ["127.0.0.1:${TRUSTPASS_PORT:-18120}:8080"]
+    networks: [edge, backend]
+    depends_on:
+      issuer: {condition: service_healthy}
+      verifier: {condition: service_healthy}
+      audit: {condition: service_healthy}
+    mem_limit: 128m
+    cpus: 0.5
+networks:
+  edge:
+  backend:
+    internal: true
+volumes:
+  issuer_data:
+  verifier_data:
+  audit_data:
+secrets:
+  api_token: {file: .secrets/api-token}
+  internal_token: {file: .secrets/internal-token}
+  signing_key: {file: .secrets/signing.pem}
+  verification_key: {file: .secrets/verification.pem}

@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.secrets
+.venv*
+__pycache__
+artifacts
+tests
+.pytest_cache
+.ruff_cache
+.coverage
+*.db*
