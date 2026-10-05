@@ -113,3 +113,7 @@ Para desplegar imÃ¡genes publicadas, sustituir `APP_IMAGE` y `GATEWAY_IMAGE` en 
 - [Contratos versionados](contracts/)
 
 Licencia MIT.
+
+### Política del runtime Python
+
+Python 3.12 es la serie validada conjuntamente por los contenedores, CI en Linux y Windows y los archivos bloqueados con hashes. Dependabot conserva sus parches y actualizaciones de digest. Una migración a otra serie requiere revisar CI, regenerar los locks y validar los paquetes nativos y las imágenes; el cambio aislado de un tag Docker no constituye esa migración. Los parches de Debian y el control de vulnerabilidades siguen activos.
