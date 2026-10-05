@@ -9,6 +9,10 @@ LABEL org.opencontainers.image.title="TrustPass Platform" \
       org.opencontainers.image.source="https://github.com/jorgefprietol/trustpass-platform" \
       org.opencontainers.image.revision=$SOURCE_REVISION
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# Apply available Debian security fixes for PCRE2 and Perl before dropping privileges.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libpcre2-8-0 perl-base \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app \
     && mkdir /data && chown app:app /data
 COPY --from=dependencies /opt/venv /opt/venv
