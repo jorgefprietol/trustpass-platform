@@ -10,6 +10,10 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: {interval: weekly}
+    # Python feature-series upgrades require matching CI, lock files and image review.
+    ignore:
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
   - package-ecosystem: docker
     directory: /gateway
     schedule: {interval: weekly}
